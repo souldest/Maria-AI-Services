@@ -1,0 +1,17 @@
+# Web & UI
+streamlit
+
+# Daten & Forecast
+pandas
+numpy
+prophet
+plotly
+
+# DB
+sqlalchemy
+psycopg2-binary
+
+# Extras
+requests
+openpyxl
+xlsxwriter
