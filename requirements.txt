@@ -1,17 +1,22 @@
 # Web & UI
-streamlit
+streamlit>=1.28.0
 
 # Daten & Forecast
-pandas
-numpy
-prophet
-plotly
+fastapi>=0.109.0
+uvicorn[standard]>=0.23,<0.39
+scikit-learn
+matplotlib
+pandas>=2.0
+numpy>=1.26
+prophet>=1.2.0
 
-# DB
-sqlalchemy
-psycopg2-binary
+# Datenbank
+sqlalchemy>=2.0
+psycopg2-binary>=2.9
 
 # Extras
-requests
-openpyxl
-xlsxwriter
+requests>=2.32
+openpyxl>=3.1
+XlsxWriter>=3.0
+plotly>=5.17
+

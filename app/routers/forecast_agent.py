@@ -1,77 +1,73 @@
-import os
-from sqlalchemy import create_engine, text
-from datetime import datetime, timedelta
-from typing import List, Dict
-import pandas as pd
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 from prophet import Prophet
-import numpy as np
+import pandas as pd
+from datetime import datetime, timedelta
+from joblib import Parallel, delayed
+from app.database import SessionLocal, engine
+from typing import Dict, List
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-engine = create_engine(DATABASE_URL)
+router = APIRouter()
 
+# Dependency für DB Session
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# --- Forecast Agent Klasse ---
 class EnterpriseForecastAgent:
     """
-    Enterprise-ready Forecast Agent für Umsatz & Vorrat.
-    Features:
+    Forecast Agent für Umsatz & Vorrat.
     - Prophet Zeitreihenprognose
     - Lagerhistorie berücksichtigt
     - Dynamische Sicherheitsbestände
     - Warnungen & Nachbestellvorschläge
+    - Optimiert für große Datensätze mit Parallelisierung
     """
-
-    def __init__(self, base_safety_stock: int = 5, forecast_days: int = 14, alert_callback=None):
-        self.engine = engine
-        self.base_safety_stock = base_safety_stock
+    def __init__(self, db: Session, forecast_days: int = 14, base_safety_stock: int = 5, alert_callback=None):
+        self.db = db
         self.forecast_days = forecast_days
-        self.alert_callback = alert_callback  # z.B. Funktion zum Versenden von Alerts
+        self.base_safety_stock = base_safety_stock
+        self.alert_callback = alert_callback
 
+    # --- Daten laden ---
     def fetch_sales_data(self) -> pd.DataFrame:
-        with self.engine.connect() as conn:
-            result = conn.execute(text("""
-                SELECT router_id, amount, created_at
-                FROM sales
-                ORDER BY created_at ASC
-            """))
-            data = [dict(row) for row in result]
-        df = pd.DataFrame(data)
-        df['created_at'] = pd.to_datetime(df['created_at'])
-        return df
+        query = "SELECT router_id, amount, created_at FROM sales ORDER BY created_at ASC"
+        return pd.read_sql(query, self.db.bind)
 
     def fetch_inventory_data(self) -> pd.DataFrame:
-        with self.engine.connect() as conn:
-            result = conn.execute(text("""
-                SELECT router_id, product_name, stock_level
-                FROM inventory
-            """))
-            data = [dict(row) for row in result]
-        df = pd.DataFrame(data)
-        return df
+        query = "SELECT router_id, product_name, stock_level FROM inventory"
+        return pd.read_sql(query, self.db.bind)
 
+    # --- Prophet Forecast Helper ---
+    def _forecast_timeseries(self, df: pd.DataFrame, value_col: str) -> pd.DataFrame:
+        if df.empty or len(df) < 3:
+            return pd.DataFrame({
+                'ds': [datetime.now() + timedelta(days=i) for i in range(self.forecast_days)],
+                'yhat': [df[value_col].mean() if not df.empty else 0] * self.forecast_days,
+                'yhat_lower': [0] * self.forecast_days,
+                'yhat_upper': [0] * self.forecast_days
+            })
+        ts = df.rename(columns={'created_at': 'ds', value_col: 'y'})
+        model = Prophet(daily_seasonality=True, weekly_seasonality=True, yearly_seasonality=True)
+        model.fit(ts)
+        future = model.make_future_dataframe(periods=self.forecast_days)
+        forecast = model.predict(future)
+        return forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(self.forecast_days)
+
+    # --- Umsatz Forecast ---
     def forecast_sales(self) -> Dict[int, pd.DataFrame]:
-        """Forecast per router using Prophet."""
         df = self.fetch_sales_data()
-        forecasts = {}
+        def forecast_router(rid, group):
+            return rid, self._forecast_timeseries(group.groupby('created_at')['amount'].sum().reset_index(), 'y')
+        results = Parallel(n_jobs=-1)(delayed(forecast_router)(rid, group) for rid, group in df.groupby('router_id'))
+        return dict(results)
 
-        for rid, group in df.groupby('router_id'):
-            ts = group.groupby('created_at')['amount'].sum().reset_index()
-            ts.rename(columns={'created_at': 'ds', 'amount': 'y'}, inplace=True)
-
-            if len(ts) < 3:
-                ts_future = pd.DataFrame({
-                    'ds': [datetime.now() + timedelta(days=i) for i in range(self.forecast_days)],
-                    'yhat': [ts['y'].mean() if len(ts) > 0 else 0] * self.forecast_days
-                })
-            else:
-                model = Prophet(daily_seasonality=True, weekly_seasonality=True, yearly_seasonality=True)
-                model.fit(ts)
-                future = model.make_future_dataframe(periods=self.forecast_days)
-                forecast = model.predict(future)
-                ts_future = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(self.forecast_days)
-
-            forecasts[rid] = ts_future
-        return forecasts
-
-    def generate_restock_suggestions(self) -> Dict[int, List[Dict]]:
+    # --- Vorrat Forecast ---
+    def forecast_inventory(self) -> Dict[int, List[Dict]]:
         inventory_df = self.fetch_inventory_data()
         sales_forecasts = self.forecast_sales()
         restock_suggestions = {}
@@ -101,31 +97,33 @@ class EnterpriseForecastAgent:
 
         return restock_suggestions
 
-    def summary_report(self) -> Dict[int, Dict]:
-        """Zusammenfassender Enterprise-Report pro Router."""
-        sales_forecasts = self.forecast_sales()
-        inventory_df = self.fetch_inventory_data()
-        restock = self.generate_restock_suggestions()
-
-        report = {}
-        router_ids = set(list(sales_forecasts.keys()) + list(inventory_df['router_id'].unique()))
-        for rid in router_ids:
-            forecast_df = sales_forecasts.get(rid)
-            forecast_list = forecast_df.to_dict(orient='records') if forecast_df is not None else []
-            inventory_list = inventory_df[inventory_df['router_id'] == rid].to_dict(orient='records')
-            report[rid] = {
-                "sales_forecast": forecast_list,
-                "inventory": inventory_list,
-                "restock_suggestions": restock.get(rid, [])
-            }
-        return report
-
-# Beispiel für einen Alert-Callback
+# --- Beispiel Alert Callback ---
 def slack_alert(router_id, product_name, current_stock, reorder_qty):
     print(f"[ALERT] Router {router_id}, Produkt {product_name} niedrig: {current_stock} Stück, Nachbestellung: {reorder_qty}")
 
-if __name__ == "__main__":
-    agent = EnterpriseForecastAgent(alert_callback=slack_alert)
-    report = agent.summary_report()
-    import json
-    print(json.dumps(report, indent=4))
+# --- FastAPI Endpoints ---
+@router.get("/sales")
+def predict_sales(db: Session = Depends(get_db)):
+    agent = EnterpriseForecastAgent(db)
+    return agent.forecast_sales()
+
+@router.get("/inventory")
+def predict_inventory(db: Session = Depends(get_db)):
+    agent = EnterpriseForecastAgent(db, alert_callback=slack_alert)
+    return agent.forecast_inventory()
+
+@router.get("/inventory-report")
+def inventory_report(db: Session = Depends(get_db)):
+    agent = EnterpriseForecastAgent(db, alert_callback=slack_alert)
+    sales = agent.forecast_sales()
+    inventory = agent.fetch_inventory_data()
+    restock = agent.forecast_inventory()
+    report = {}
+    router_ids = set(list(sales.keys()) + list(inventory['router_id'].unique()))
+    for rid in router_ids:
+        report[rid] = {
+            "sales_forecast": sales.get(rid).to_dict(orient='records') if sales.get(rid) is not None else [],
+            "inventory": inventory[inventory['router_id']==rid].to_dict(orient='records'),
+            "restock_suggestions": restock.get(rid, [])
+        }
+    return report
