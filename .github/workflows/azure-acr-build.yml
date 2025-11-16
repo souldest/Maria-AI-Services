@@ -1,41 +1,41 @@
-name: Build and Push Docker Images to ACR
+name: Build and Deploy Backend to Azure Container Apps
 
 on:
   push:
-    branches:
-      - main  # Passe ggf. deinen Branch an
+    branches: [ "main" ]
 
 jobs:
-  build-and-push:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
-    env:
-      REGISTRY_NAME: mariaaiacr
-      BACKEND_IMAGE: backend:latest
-      FRONTEND_IMAGE: frontend:latest
-      RESOURCE_GROUP: mariaai-rg  # optional, falls benötigt
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+    - name: Checkout
+      uses: actions/checkout@v3
 
-      - name: Login to Azure
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+    # Azure Login via Service Principal
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Login to ACR
-        run: |
-          az acr login --name $REGISTRY_NAME
+    # Login to Azure Container Registry
+    - name: ACR Login
+      uses: azure/docker-login@v1
+      with:
+        login-server: mariaairegistry001.azurecr.io
+        username: ${{ secrets.ACR_USERNAME }}
+        password: ${{ secrets.ACR_PASSWORD }}
 
-      # Backend build & push
-      - name: Build and Push Backend Docker Image
-        run: |
-          docker build -t $REGISTRY_NAME.azurecr.io/$BACKEND_IMAGE ./backend
-          docker push $REGISTRY_NAME.azurecr.io/$BACKEND_IMAGE
+    # Build Backend Image and push to ACR
+    - name: Build and Push Backend Image
+      run: |
+        docker build -f backend/Dockerfile -t mariaairegistry001.azurecr.io/meinimage:latest ./backend
+        docker push mariaairegistry001.azurecr.io/meinimage:latest
 
-      # Frontend build & push
-      - name: Build and Push Frontend Docker Image
-        run: |
-          docker build -t $REGISTRY_NAME.azurecr.io/$FRONTEND_IMAGE ./frontend
-          docker push $REGISTRY_NAME.azurecr.io/$FRONTEND_IMAGE
+    # Deploy to Azure Container Apps
+    - name: Deploy Backend to Azure Container Apps
+      run: |
+        az containerapp update \
+          -n maria-ai-app \
+          -g maria-ai-service-001_group \
+          --image mariaairegistry001.azurecr.io/meinimage:latest

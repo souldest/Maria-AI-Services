@@ -1,33 +1,30 @@
-# streamlit_app.py (Frontend)
-import sys
-import os
 import streamlit as st
-import pandas as pd
-import matplotlib.pyplot as plt
+import requests
 
-# Backend-Pfad hinzufügen, damit Imports funktionieren
-sys.path.append(os.path.abspath("../backend"))
+# ----------------------------------------
+# Backend-URL (intern im Container)
+# ----------------------------------------
+BACKEND_URL = "http://localhost:8000/forecast"
 
-# Backend-Module importieren
-from data_loader import load_data
-from app.routers.forecast_agent import EnterpriseForecastAgent
+# ----------------------------------------
+# Streamlit App
+# ----------------------------------------
+st.title("Maria AI Forecast Dashboard")
 
-st.title("Forecast Agent: Umsatz & Vorrat Vorhersage")
+# Auswahl der Forecast-Art
+forecast_type = st.radio("Forecast Type", ["Sales", "Inventory"])
 
-uploaded_file = st.file_uploader("CSV Datei hochladen", type=["csv"])
-if uploaded_file:
-    df = load_data(uploaded_file)
-    st.write("Daten Vorschau:")
-    st.dataframe(df.head())
-
-    agent = EnterpriseForecastAgent()
-
-    # Umsatz Vorhersage
-    st.header("Umsatz Prognose")
-    sales_forecast = agent.forecast_sales(df)
-    st.dataframe(sales_forecast)
-
-    # Vorrat Vorhersage
-    st.header("Vorrat Prognose")
-    inventory_forecast = agent.forecast_inventory(df)
-    st.dataframe(inventory_forecast)
+if st.button("Get Forecast"):
+    if forecast_type == "Sales":
+        url = f"{BACKEND_URL}/sales"
+    else:
+        url = f"{BACKEND_URL}/inventory"
+    
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        st.write(f"### {forecast_type} Forecast")
+        st.json(data)
+    except requests.exceptions.RequestException as e:
+        st.error(f"Fehler beim Abrufen der Daten: {e}")
