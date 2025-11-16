@@ -1,36 +1,49 @@
-name: Azure ACR Build & Deploy
+name: Azure Container Registry Deploy
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch:
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # Schritt 1: Repo auschecken
+      # Schritt 0: Repository auschecken
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Schritt 2: Azure Login über Secret
+      # Schritt 1: Azure Login mit dem Secret
       - name: Azure Login
         uses: azure/login@v1
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS4 }}
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # Schritt 3: Login zum Azure Container Registry
+      # Schritt 2: Login zu Azure Container Registry
       - name: Login to Azure Container Registry
         run: az acr login --name ${{ secrets.AZURE_ACR_NAME }}
 
-      # Schritt 4: Docker Image bauen
+      # Schritt 3: Docker-Image bauen
       - name: Build Docker Image
         run: |
           docker build -t ${{ secrets.AZURE_ACR_NAME }}.azurecr.io/maria-ai:latest .
 
-      # Schritt 5: Docker Image pushen
+      # Schritt 4: Docker-Image pushen
       - name: Push Docker Image to ACR
         run: |
           docker push ${{ secrets.AZURE_ACR_NAME }}.azurecr.io/maria-ai:latest
+
+      # Optional Schritt 5: Container auf Azure Container Instance / Web App deployen
+      # - name: Deploy to Azure Container Instance
+      #   run: |
+      #     az container create \
+      #       --resource-group <RESOURCE_GROUP> \
+      #       --name maria-ai-container \
+      #       --image ${{ secrets.AZURE_ACR_NAME }}.azurecr.io/maria-ai:latest \
+      #       --cpu 1 --memory 1.5 \
+      #       --registry-login-server ${{ secrets.AZURE_ACR_NAME }}.azurecr.io \
+      #       --registry-username <ACR_USERNAME> \
+      #       --registry-password <ACR_PASSWORD> \
+      #       --dns-name-label maria-ai-demo \
+      #       --ports 8501
