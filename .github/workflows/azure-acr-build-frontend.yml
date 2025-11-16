@@ -1,4 +1,4 @@
-name: Build & Deploy Frontend to Azure
+name: Build and Push Frontend Docker Image
 
 on:
   push:
@@ -6,35 +6,28 @@ on:
       - main
 
 jobs:
-  build-and-deploy:
+  build-and-push:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+    # Schritt 0: Repository auschecken
+    - uses: actions/checkout@v3
 
-      - name: Login via Azure CLI
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS4 }}
+    # Schritt 1: Azure Login mit Secret
+    - uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS4 }}
 
-      - name: Build & Push Docker image
-        uses: azure/docker-login@v1
-        with:
-          login-server: mariaairegistry001.azurecr.io
-          username: ${{ secrets.AZURE_CREDENTIALS4_USERNAME }}
-          password: ${{ secrets.AZURE_CREDENTIALS4_PASSWORD }}
+    # Schritt 2: Login zu Azure Container Registry
+    - name: Login to Azure Container Registry
+      run: az acr login --name ${{ secrets.AZURE_ACR_NAME }}
 
-      - name: Build Docker image
-        run: |
-          docker build -f frontend/Dockerfile -t mariaairegistry001.azurecr.io/maria-ai-frontend:latest frontend
-          docker push mariaairegistry001.azurecr.io/maria-ai-frontend:latest
+    # Schritt 3: Docker Build
+    - name: Build Frontend Docker Image
+      run: |
+        docker build -t ${{ secrets.AZURE_ACR_NAME }}.azurecr.io/frontend:latest ./frontend
 
-      - name: Deploy Frontend to Azure Container App
-        run: |
-          az containerapp update \
-            --name maria-ai-app \
-            --resource-group maria-ai-service-001_group \
-            --image mariaairegistry001.azurecr.io/maria-ai-frontend:latest \
-            --cpu 1 --memory 1.5Gi \
-            --min-replicas 1 --max-replicas 2
+    # Schritt 4: Docker Push
+    - name: Push Frontend Docker Image
+      run: |
+        docker push ${{ secrets.AZURE_ACR_NAME }}.azurecr.io/frontend:latest
