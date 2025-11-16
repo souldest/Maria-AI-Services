@@ -1,31 +1,36 @@
-name: Build and Push Docker to ACR
+name: Azure ACR Build & Deploy
 
 on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
-  build-and-push:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # Schritt 0: Repository auschecken
-      - uses: actions/checkout@v3
+      # Schritt 1: Repo auschecken
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-      # Schritt 1: Azure Login mit Secret
-      - uses: azure/login@v1
+      # Schritt 2: Azure Login über Secret
+      - name: Azure Login
+        uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS4 }}
 
-      # Schritt 2: ACR Login über Azure CLI
+      # Schritt 3: Login zum Azure Container Registry
       - name: Login to Azure Container Registry
         run: az acr login --name ${{ secrets.AZURE_ACR_NAME }}
 
-      # Schritt 3: Docker Image bauen
-      - name: Build Docker image
-        run: docker build -t ${{ secrets.AZURE_ACR_NAME }}.azurecr.io/maria-ai:latest .
+      # Schritt 4: Docker Image bauen
+      - name: Build Docker Image
+        run: |
+          docker build -t ${{ secrets.AZURE_ACR_NAME }}.azurecr.io/maria-ai:latest .
 
-      # Schritt 4: Docker Image pushen
-      - name: Push Docker image to ACR
-        run: docker push ${{ secrets.AZURE_ACR_NAME }}.azurecr.io/maria-ai:latest
+      # Schritt 5: Docker Image pushen
+      - name: Push Docker Image to ACR
+        run: |
+          docker push ${{ secrets.AZURE_ACR_NAME }}.azurecr.io/maria-ai:latest
