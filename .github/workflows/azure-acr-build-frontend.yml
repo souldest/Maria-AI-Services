@@ -1,4 +1,4 @@
-name: Azure ACR Build & Deploy Frontend
+name: Build & Deploy Frontend to Azure
 
 on:
   push:
@@ -10,39 +10,31 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Repository auschecken
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v3
 
-      # 2. Azure Login
-      - name: Azure Login
+      - name: Login via Azure CLI
         uses: azure/login@v1
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS3 }}
+          creds: ${{ secrets.AZURE_CREDENTIALS4 }}
 
-      # 3. Build & Push Frontend Docker Image zu ACR
-      - name: Build and push Docker image
+      - name: Build & Push Docker image
         uses: azure/docker-login@v1
         with:
           login-server: mariaairegistry001.azurecr.io
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
+          username: ${{ secrets.AZURE_CREDENTIALS4_USERNAME }}
+          password: ${{ secrets.AZURE_CREDENTIALS4_PASSWORD }}
 
-      - name: Build Docker Image
+      - name: Build Docker image
         run: |
-          docker build -f frontend/Dockerfile -t mariaairegistry001.azurecr.io/frontend:latest frontend
-          docker push mariaairegistry001.azurecr.io/frontend:latest
+          docker build -f frontend/Dockerfile -t mariaairegistry001.azurecr.io/maria-ai-frontend:latest frontend
+          docker push mariaairegistry001.azurecr.io/maria-ai-frontend:latest
 
-      # 4. Azure Container App erstellen oder aktualisieren
-      - name: Deploy to Azure Container App
+      - name: Deploy Frontend to Azure Container App
         run: |
           az containerapp update \
-            -n maria-frontend-app \
-            -g maria-ai-service-001_group \
-            --image mariaairegistry001.azurecr.io/frontend:latest \
-            --cpu 0.5 \
-            --memory 1.0Gi \
-            --min-replicas 1 \
-            --max-replicas 2 \
-            --ingress external \
-            --target-port 8501
+            --name maria-ai-app \
+            --resource-group maria-ai-service-001_group \
+            --image mariaairegistry001.azurecr.io/maria-ai-frontend:latest \
+            --cpu 1 --memory 1.5Gi \
+            --min-replicas 1 --max-replicas 2

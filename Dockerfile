@@ -1,30 +1,30 @@
-# ----------------------------------------
-# Base Image
-# ----------------------------------------
-FROM python:3.11-slim
-
-# ----------------------------------------
-# Arbeitsverzeichnis im Container
-# ----------------------------------------
-WORKDIR /app
-
-# ----------------------------------------
-# Abhängigkeiten installieren
-# ----------------------------------------
-COPY requirements.txt .
+# Stage 1: Backend
+FROM python:3.11-slim AS backend
+WORKDIR /app/backend
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+COPY backend/ .
 
-# ----------------------------------------
-# gesamten Code kopieren
-# ----------------------------------------
-COPY . .
+# Stage 2: Frontend
+FROM python:3.11-slim AS frontend
+WORKDIR /app/frontend
+COPY frontend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY frontend/ .
 
-# ----------------------------------------
-# Port für Streamlit exposen
-# ----------------------------------------
+# Stage 3: Final image mit Nginx
+FROM nginx:alpine
+COPY nginx/default.conf /etc/nginx/conf.d/default.conf
+
+# Copy backend & frontend
+COPY --from=backend /app/backend /app/backend
+COPY --from=frontend /app/frontend /app/frontend
+
+# Install Supervisor, um mehrere Prozesse zu starten
+RUN apk add --no-cache python3 py3-pip supervisor \
+    && pip install uvicorn streamlit
+
+COPY supervisord.conf /etc/supervisord.conf
+
 EXPOSE 80
-
-# ----------------------------------------
-# Backend (FastAPI) und Frontend (Streamlit) gleichzeitig starten
-# ----------------------------------------
-CMD ["sh", "-c", "uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 & streamlit run frontend/streamlit_app.py --server.port 80 --server.address 0.0.0.0 --server.headless true"]
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]
