@@ -1,0 +1,41 @@
+name: Build and Push Docker Images to ACR
+
+on:
+  push:
+    branches:
+      - main  # Passe ggf. deinen Branch an
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    env:
+      REGISTRY_NAME: mariaaiacr
+      BACKEND_IMAGE: backend:latest
+      FRONTEND_IMAGE: frontend:latest
+      RESOURCE_GROUP: mariaai-rg  # optional, falls benötigt
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Login to ACR
+        run: |
+          az acr login --name $REGISTRY_NAME
+
+      # Backend build & push
+      - name: Build and Push Backend Docker Image
+        run: |
+          docker build -t $REGISTRY_NAME.azurecr.io/$BACKEND_IMAGE ./backend
+          docker push $REGISTRY_NAME.azurecr.io/$BACKEND_IMAGE
+
+      # Frontend build & push
+      - name: Build and Push Frontend Docker Image
+        run: |
+          docker build -t $REGISTRY_NAME.azurecr.io/$FRONTEND_IMAGE ./frontend
+          docker push $REGISTRY_NAME.azurecr.io/$FRONTEND_IMAGE
