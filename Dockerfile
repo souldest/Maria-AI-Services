@@ -1,25 +1,32 @@
-# Base image
+# ------------------------------
+# Basis-Image
+# ------------------------------
 FROM python:3.11-slim
 
-# Arbeitsverzeichnis erstellen
+# ------------------------------
+# Arbeitsverzeichnis
+# ------------------------------
 WORKDIR /app
 
+# ------------------------------
 # Abhängigkeiten kopieren und installieren
+# ------------------------------
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Backend und Frontend Code kopieren
+# ------------------------------
+# Applikation kopieren
+# ------------------------------
 COPY backend ./backend
 COPY frontend ./frontend
+COPY supervisord.conf ./supervisord.conf
 
-# Supervisord installieren
-RUN apt-get update && apt-get install -y supervisor && rm -rf /var/lib/apt/lists/*
+# ------------------------------
+# Logs-Verzeichnis
+# ------------------------------
+RUN mkdir -p /app/logs
 
-# Supervisord Konfig kopieren
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-
-# Port freigeben (Streamlit Standardport 8501)
-EXPOSE 8501
-
-# Supervisord als Entrypoint starten
-CMD ["/usr/bin/supervisord", "-n"]
+# ------------------------------
+# Supervisord als Entrypoint
+# ------------------------------
+CMD ["supervisord", "-c", "/app/supervisord.conf"]
