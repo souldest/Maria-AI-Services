@@ -3,53 +3,33 @@ name: Deploy forecast_agent updates
 on:
   push:
     branches:
-      - master
+      - main
 
 jobs:
-  build-and-deploy:
+  deploy:
+    name: Build and Deploy to Azure Container Apps
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Repo auschecken
-      - name: Checkout repository
-        uses: actions/checkout@v3
+    - name: Checkout repository
+      uses: actions/checkout@v3
 
-      # 2. Azure Login
-      - name: Login to Azure
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+    - name: Set up Azure CLI
+      uses: azure/setup-azure@v3
 
-      # 3. Build Docker Image
-      - name: Build Docker image
-        run: |
-          docker build -t ${{ secrets.ACR_NAME }}.azurecr.io/${{ secrets.IMAGE_NAME }}:latest .
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # 4. Login to ACR
-      - name: Login to Azure Container Registry
-        run: |
-          echo ${{ secrets.ACR_PASSWORD }} | docker login ${{ secrets.ACR_NAME }}.azurecr.io -u ${{ secrets.ACR_USERNAME }} --password-stdin
+    - name: Enable Docker experimental features
+      run: echo '{"experimental": "enabled"}' | sudo tee /etc/docker/daemon.json
 
-      # 5. Push Docker Image
-      - name: Push Docker image to ACR
-        run: |
-          docker push ${{ secrets.ACR_NAME }}.azurecr.io/${{ secrets.IMAGE_NAME }}:latest
+    - name: Install Docker (if not available)
+      run: sudo apt-get update && sudo apt-get install -y docker.io
 
-      # 6. Deploy to Azure Container App
-      - name: Deploy to Azure Container App
-        run: |
-          az containerapp update \
-            --name forecast-agent-app \
-            --resource-group maria-ai-service-001_group \
-            --image ${{ secrets.ACR_NAME }}.azurecr.io/${{ secrets.IMAGE_NAME }}:latest \
-            --environment maria-ai-env \
-            --cpu 0.5 --memory 1Gi \
-            --min-replicas 1 --max-replicas 3 \
-            --ingress external \
-            --target-port 8501 \
-            --env-vars \
-              PGHOST=${{ secrets.PGHOST }} \
-              PGUSER=${{ secrets.PGUSER }} \
-              PGPASSWORD=${{ secrets.PGPASSWORD }} \
-              PGDATABASE=${{ secrets.PGDATABASE }} \
-              PGPORT=${{ secrets.PGPORT }}
+    - name: Make deploy script executable
+      run: chmod +x ./create-containerapps.sh
+
+    - name: Run deploy script
+      run: ./create-containerapps.sh
