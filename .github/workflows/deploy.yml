@@ -1,52 +1,41 @@
-name: Build & Deploy to Azure Container Apps
+name: Deploy forecast_agent updates
 
 on:
   push:
     branches:
-      - main
+      - master
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
+    env:
+      ACR_NAME: mariaairegistry001
+      RESOURCE_GROUP: maria-ai-service-001_group
+      ENVIRONMENT: maria-ai-env
+      BACKEND_APP: forecast-backend-app
+      FRONTEND_APP: forecast-frontend-app
+
     steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
 
-      - name: Checkout repository
-        uses: actions/checkout@v3
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Log in to Azure
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+    - name: Build & push backend image to ACR
+      run: |
+        docker build -t $ACR_NAME.azurecr.io/$BACKEND_APP:latest ./backend
+        echo ${{ secrets.ACR_PASSWORD }} | docker login $ACR_NAME.azurecr.io -u ${{ secrets.ACR_USERNAME }} --password-stdin
+        docker push $ACR_NAME.azurecr.io/$BACKEND_APP:latest
 
-      - name: Log in to ACR
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
-          registry: mariaairegistry001.azurecr.io
+    - name: Build & push frontend image to ACR
+      run: |
+        docker build -t $ACR_NAME.azurecr.io/$FRONTEND_APP:latest ./frontend
+        echo ${{ secrets.ACR_PASSWORD }} | docker login $ACR_NAME.azurecr.io -u ${{ secrets.ACR_USERNAME }} --password-stdin
+        docker push $ACR_NAME.azurecr.io/$FRONTEND_APP:latest
 
-      - name: Build and Push Backend Docker Image
-        run: |
-          docker build -t mariaairegistry001.azurecr.io/forecast-backend:latest ./backend
-          docker push mariaairegistry001.azurecr.io/forecast-backend:latest
-
-      - name: Build and Push Frontend Docker Image
-        run: |
-          docker build -t mariaairegistry001.azurecr.io/forecast-frontend:latest ./frontend
-          docker push mariaairegistry001.azurecr.io/forecast-frontend:latest
-
-      - name: Deploy Backend to Azure Container Apps
-        run: |
-          az containerapp update \
-            --name forecast-backend-app \
-            --resource-group maria-ai-service-001_group \
-            --image mariaairegistry001.azurecr.io/forecast-backend:latest \
-            --environment maria-ai-env
-
-      - name: Deploy Frontend to Azure Container Apps
-        run: |
-          az containerapp update \
-            --name forecast-frontend-app \
-            --resource-group maria-ai-service-001_group \
-            --image mariaairegistry001.azurecr.io/forecast-frontend:latest \
-            --environment maria-ai-env
+    - name: Deploy to Azure Container Apps
+      run: |
+        ./create-containerapps.sh
