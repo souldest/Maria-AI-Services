@@ -1,0 +1,59 @@
+name: CI/CD - Deploy to Azure Container App
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      IMAGE_NAME: mariadb-forecast-app
+      RESOURCE_GROUP: aria-ai-service-001_group
+      CONTAINER_APP_NAME: maria-ai-container
+      LOCATION: westeurope
+      ENVIRONMENT_NAME: maria-ai-env
+      ACR_NAME: mariaaiacr  # Azure Container Registry Name
+
+    steps:
+      # 1️⃣ Checkout Repository
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # 2️⃣ Login to Azure
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # 3️⃣ Login to Azure Container Registry
+      - name: Azure Container Registry Login
+        run: |
+          az acr login --name $ACR_NAME
+
+      # 4️⃣ Build Docker Image
+      - name: Build Docker image
+        run: |
+          docker build -t $ACR_NAME.azurecr.io/$IMAGE_NAME:latest .
+
+      # 5️⃣ Push Docker Image to ACR
+      - name: Push Docker image
+        run: |
+          docker push $ACR_NAME.azurecr.io/$IMAGE_NAME:latest
+
+      # 6️⃣ Deploy Container App
+      - name: Deploy to Azure Container App
+        run: |
+          az containerapp update \
+            --name $CONTAINER_APP_NAME \
+            --resource-group $RESOURCE_GROUP \
+            --image $ACR_NAME.azurecr.io/$IMAGE_NAME:latest \
+            --environment $ENVIRONMENT_NAME \
+            --cpu 0.5 \
+            --memory 1.0Gi \
+            --min-replicas 1 \
+            --max-replicas 2 \
+            --ingress external \
+            --target-port 80
