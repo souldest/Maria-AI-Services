@@ -13,6 +13,9 @@ jobs:
       ACR_NAME: mariaairegistry001
       BACKEND_APP: forecast-backend-app
       FRONTEND_APP: forecast-frontend-app
+      RESOURCE_GROUP: maria-ai-service-001_group
+      CONTAINERAPP_ENV: maria-ai-env
+      LOCATION: westeurope
 
     steps:
       - name: Checkout repository
@@ -25,36 +28,30 @@ jobs:
 
       - name: Log in to Azure Container Registry
         run: |
-          echo "${{ secrets.ACR_PASSWORD }}" | docker login $ACR_NAME.azurecr.io -u $ACR_NAME --password-stdin
+          echo ${{ secrets.ACR_PASSWORD }} | docker login $ACR_NAME.azurecr.io -u $ACR_NAME --password-stdin
 
-      - name: Build Backend Docker Image
+      - name: Build and push Backend Docker image
         run: |
-          docker build -t $ACR_NAME.azurecr.io/$BACKEND_APP:latest -f ./Dockerfile ./backend
-
-      - name: Build Frontend Docker Image
-        run: |
-          docker build -t $ACR_NAME.azurecr.io/$FRONTEND_APP:latest -f ./Dockerfile ./frontend
-
-      - name: Push Backend Image to ACR
-        run: |
+          docker build -t $ACR_NAME.azurecr.io/$BACKEND_APP:latest ./backend
           docker push $ACR_NAME.azurecr.io/$BACKEND_APP:latest
 
-      - name: Push Frontend Image to ACR
+      - name: Build and push Frontend Docker image
         run: |
+          docker build -t $ACR_NAME.azurecr.io/$FRONTEND_APP:latest ./frontend
           docker push $ACR_NAME.azurecr.io/$FRONTEND_APP:latest
 
       - name: Deploy Backend Container App
         run: |
           az containerapp update \
             --name $BACKEND_APP \
-            --resource-group maria-ai-service-001_group \
-            --image $ACR_NAME.azurecr.io/$BACKEND_APP:latest \
-            --environment maria-ai-env
+            --resource-group $RESOURCE_GROUP \
+            --environment $CONTAINERAPP_ENV \
+            --image $ACR_NAME.azurecr.io/$BACKEND_APP:latest
 
       - name: Deploy Frontend Container App
         run: |
           az containerapp update \
             --name $FRONTEND_APP \
-            --resource-group maria-ai-service-001_group \
-            --image $ACR_NAME.azurecr.io/$FRONTEND_APP:latest \
-            --environment maria-ai-env
+            --resource-group $RESOURCE_GROUP \
+            --environment $CONTAINERAPP_ENV \
+            --image $ACR_NAME.azurecr.io/$FRONTEND_APP:latest
