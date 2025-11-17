@@ -5,31 +5,58 @@ on:
     branches:
       - main
 
+env:
+  RESOURCE_GROUP: "maria-ai-service-001_group"
+  ENVIRONMENT_NAME: "maria-ai-env"
+  ACR_NAME: "mariaairegistry001"
+  BACKEND_APP_NAME: "forecast-backend-app"
+  FRONTEND_APP_NAME: "forecast-frontend-app"
+  BACKEND_IMAGE: "forecast-backend:latest"
+  FRONTEND_IMAGE: "forecast-frontend:latest"
+
 jobs:
-  deploy:
-    name: Build and Deploy to Azure Container Apps
+  build-and-deploy:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      # 1. Checkout repo
+      - uses: actions/checkout@v3
 
-    - name: Set up Azure CLI
-      uses: azure/setup-azure@v3
+      # 2. Login to Azure
+      - uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-    - name: Login to Azure
-      uses: azure/login@v1
-      with:
-        creds: ${{ secrets.AZURE_CREDENTIALS }}
+      # 3. Login to Azure Container Registry
+      - name: Azure Container Registry login
+        run: |
+          az acr login --name $ACR_NAME
 
-    - name: Enable Docker experimental features
-      run: echo '{"experimental": "enabled"}' | sudo tee /etc/docker/daemon.json
+      # 4. Build and push backend image
+      - name: Build and Push Backend Docker Image
+        run: |
+          docker build -t $ACR_NAME.azurecr.io/$BACKEND_IMAGE ./backend
+          docker push $ACR_NAME.azurecr.io/$BACKEND_IMAGE
 
-    - name: Install Docker (if not available)
-      run: sudo apt-get update && sudo apt-get install -y docker.io
+      # 5. Build and push frontend image
+      - name: Build and Push Frontend Docker Image
+        run: |
+          docker build -t $ACR_NAME.azurecr.io/$FRONTEND_IMAGE ./frontend
+          docker push $ACR_NAME.azurecr.io/$FRONTEND_IMAGE
 
-    - name: Make deploy script executable
-      run: chmod +x ./create-containerapps.sh
+      # 6. Deploy backend container app
+      - name: Deploy Backend Container App
+        run: |
+          az containerapp update \
+            --name $BACKEND_APP_NAME \
+            --resource-group $RESOURCE_GROUP \
+            --environment $ENVIRONMENT_NAME \
+            --image $ACR_NAME.azurecr.io/$BACKEND_IMAGE
 
-    - name: Run deploy script
-      run: ./create-containerapps.sh
+      # 7. Deploy frontend container app
+      - name: Deploy Frontend Container App
+        run: |
+          az containerapp update \
+            --name $FRONTEND_APP_NAME \
+            --resource-group $RESOURCE_GROUP \
+            --environment $ENVIRONMENT_NAME \
+            --image $ACR_NAME.azurecr.io/$FRONTEND_IMAGE
