@@ -6,28 +6,56 @@ on:
       - main
 
 jobs:
-  deploy:
+  docker-login:
     runs-on: ubuntu-latest
     env:
       ACR_NAME: mariaaiacr001
-
+    outputs:
+      registry: ${{ steps.set-registry.outputs.registry }}
     steps:
       - uses: actions/checkout@v3
 
-      # Login zu Azure
+      - name: Docker Login
+        id: set-registry
+        run: |
+          echo ${{ secrets.ACR_PASSWORD }} | docker login $ACR_NAME.azurecr.io -u ${{ secrets.ACR_USERNAME }} --password-stdin
+          echo "registry=$ACR_NAME.azurecr.io" >> $GITHUB_OUTPUT
+
+  build-backend:
+    runs-on: ubuntu-latest
+    needs: docker-login
+    env:
+      ACR_NAME: mariaaiacr001
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build Backend Image
+        run: |
+          docker build -t $ACR_NAME.azurecr.io/agent-backend:latest -f backend/Dockerfile ./backend
+          docker push $ACR_NAME.azurecr.io/agent-backend:latest
+
+  build-frontend:
+    runs-on: ubuntu-latest
+    needs: docker-login
+    env:
+      ACR_NAME: mariaaiacr001
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build Frontend Image
+        run: |
+          docker build -t $ACR_NAME.azurecr.io/agent-frontend:latest -f frontend/Dockerfile ./frontend
+          docker push $ACR_NAME.azurecr.io/agent-frontend:latest
+
+  deploy-backend:
+    runs-on: ubuntu-latest
+    needs: build-backend
+    env:
+      ACR_NAME: mariaaiacr001
+    steps:
+      - uses: actions/checkout@v3
       - name: Login to Azure
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      # Build und Push Backend Image
-      - name: Build and Push Backend Image
-        run: |
-          docker build -t $ACR_NAME.azurecr.io/agent-backend:latest -f backend/Dockerfile ./backend
-          echo ${{ secrets.ACR_PASSWORD }} | docker login $ACR_NAME.azurecr.io -u ${{ secrets.ACR_USERNAME }} --password-stdin
-          docker push $ACR_NAME.azurecr.io/agent-backend:latest
-
-      # Deploy Backend zu Azure Container Apps
       - name: Deploy Backend
         run: |
           az containerapp create \
@@ -50,14 +78,17 @@ jobs:
                 PGDATABASE=${{ secrets.PGDATABASE }} \
                 PGPORT=${{ secrets.PGPORT }}
 
-      # Build und Push Frontend Image
-      - name: Build and Push Frontend Image
-        run: |
-          docker build -t $ACR_NAME.azurecr.io/agent-frontend:latest -f frontend/Dockerfile ./frontend
-          echo ${{ secrets.ACR_PASSWORD }} | docker login $ACR_NAME.azurecr.io -u ${{ secrets.ACR_USERNAME }} --password-stdin
-          docker push $ACR_NAME.azurecr.io/agent-frontend:latest
-
-      # Deploy Frontend zu Azure Container Apps
+  deploy-frontend:
+    runs-on: ubuntu-latest
+    needs: [build-frontend, deploy-backend]
+    env:
+      ACR_NAME: mariaaiacr001
+    steps:
+      - uses: actions/checkout@v3
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
       - name: Deploy Frontend
         run: |
           az containerapp create \
