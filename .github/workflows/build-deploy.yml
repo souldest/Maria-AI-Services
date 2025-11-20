@@ -1,19 +1,17 @@
 name: Deploy Backend and Frontend to Azure Container Apps
 
-# Trigger auf Push auf main-Branch
 on:
   push:
     branches:
       - main
 
-# Globale Environment-Variablen
 env:
   ACR_NAME: mariaaiacr001
   ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
   ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
 
 jobs:
-  # 1️⃣ Docker Login
+  # 1. Docker Login
   docker-login:
     runs-on: ubuntu-latest
     steps:
@@ -23,7 +21,7 @@ jobs:
         run: |
           echo $ACR_PASSWORD | docker login $ACR_NAME.azurecr.io -u $ACR_USERNAME --password-stdin
 
-  # 2️⃣ Backend Image bauen und pushen
+  # 2. Backend Build & Push
   build-backend:
     runs-on: ubuntu-latest
     needs: docker-login
@@ -35,7 +33,7 @@ jobs:
           docker build -t $ACR_NAME.azurecr.io/agent-backend:latest -f backend/Dockerfile ./backend
           docker push $ACR_NAME.azurecr.io/agent-backend:latest
 
-  # 3️⃣ Frontend Image bauen und pushen
+  # 3. Frontend Build & Push
   build-frontend:
     runs-on: ubuntu-latest
     needs: docker-login
@@ -47,7 +45,7 @@ jobs:
           docker build -t $ACR_NAME.azurecr.io/agent-frontend:latest -f frontend/Dockerfile ./frontend
           docker push $ACR_NAME.azurecr.io/agent-frontend:latest
 
-  # 4️⃣ Backend deployen
+  # 4. Backend Deployment
   deploy-backend:
     runs-on: ubuntu-latest
     needs: build-backend
@@ -72,14 +70,15 @@ jobs:
             --registry-password $ACR_PASSWORD \
             --ingress external \
             --target-port 8002 \
-            --environment-variables CREWAI_API_KEY=${{ secrets.CREWAI_API_KEY }} \
-                                   PGHOST=${{ secrets.PGHOST }} \
-                                   PGUSER=${{ secrets.PGUSER }} \
-                                   PGPASSWORD=${{ secrets.PGPASSWORD }} \
-                                   PGDATABASE=${{ secrets.PGDATABASE }} \
-                                   PGPORT=${{ secrets.PGPORT }}
+            --environment-variables \
+                CREWAI_API_KEY=${{ secrets.CREWAI_API_KEY }} \
+                PGHOST=${{ secrets.PGHOST }} \
+                PGUSER=${{ secrets.PGUSER }} \
+                PGPASSWORD=${{ secrets.PGPASSWORD }} \
+                PGDATABASE=${{ secrets.PGDATABASE }} \
+                PGPORT=${{ secrets.PGPORT }}
 
-  # 5️⃣ Frontend deployen (nach Backend)
+  # 5. Frontend Deployment
   deploy-frontend:
     runs-on: ubuntu-latest
     needs: [build-frontend, deploy-backend]
@@ -104,4 +103,5 @@ jobs:
             --registry-password $ACR_PASSWORD \
             --ingress external \
             --target-port 8501 \
-            --environment-variables BACKEND_URL="https://agent-backend.${{ github.repository_owner }}.azurecontainerapps.io"
+            --environment-variables \
+                BACKEND_URL="https://agent-backend.${{ github.repository_owner }}.azurecontainerapps.io"
