@@ -1,4 +1,4 @@
-name: Deploy Backend to Azure Container Apps
+name: Deploy Backend and Frontend to Azure Container Apps
 
 on:
   push:
@@ -8,31 +8,65 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v3
 
+      # Login zu Azure
       - name: Login to Azure
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      # Backend Build & Push
       - name: Build and Push Backend Image
         run: |
           cd backend
-          docker build -t mariaairegistry.azurecr.io/agent-backend:latest .
-          echo ${{ secrets.ACR_PASSWORD }} | docker login mariaairegistry.azurecr.io -u ${{ secrets.ACR_USERNAME }} --password-stdin
-          docker push mariaairegistry.azurecr.io/agent-backend:latest
+          docker build -t mariaaiacr001.azurecr.io/agent-backend:latest .
+          echo "${{ secrets.ACR_PASSWORD }}" | docker login mariaaiacr001.azurecr.io -u "${{ secrets.ACR_USERNAME }}" --password-stdin
+          docker push mariaaiacr001.azurecr.io/agent-backend:latest
 
-      - name: Deploy Backend to Azure Container App
+      # Backend Deploy
+      - name: Deploy Backend to Azure Container Apps
         run: |
           az containerapp update \
-            --name agent-backend \
+            --name agent-backend-new \
             --resource-group maria-ai-service-001_group \
-            --image mariaairegistry.azurecr.io/agent-backend:latest \
-            --environment-variables \
-              CREWAI_API_KEY=${{ secrets.CREWAI_API_KEY }} \
-              PGHOST=${{ secrets.PGHOST }} \
-              PGUSER=${{ secrets.PGUSER }} \
-              PGPASSWORD=${{ secrets.PGPASSWORD }} \
-              PGDATABASE=${{ secrets.PGDATABASE }} \
-              PGPORT=${{ secrets.PGPORT }}
+            --image mariaaiacr001.azurecr.io/agent-backend:latest \
+            --environment maria-ai-env \
+            --registry-server mariaaiacr001.azurecr.io \
+            --registry-username "${{ secrets.ACR_USERNAME }}" \
+            --registry-password "${{ secrets.ACR_PASSWORD }}" \
+            --ingress external \
+            --target-port 8000 \
+            --set-env-vars \
+                CREWAI_API_KEY="${{ secrets.CREWAI_API_KEY }}" \
+                PGHOST="${{ secrets.PGHOST }}" \
+                PGUSER="${{ secrets.PGUSER }}" \
+                PGPASSWORD="${{ secrets.PGPASSWORD }}" \
+                PGDATABASE="${{ secrets.PGDATABASE }}" \
+                PGPORT="${{ secrets.PGPORT }}"
+
+      # Frontend Build & Push
+      - name: Build and Push Frontend Image
+        run: |
+          cd frontend
+          docker build -t mariaaiacr001.azurecr.io/agent-frontend:latest .
+          echo "${{ secrets.ACR_PASSWORD }}" | docker login mariaaiacr001.azurecr.io -u "${{ secrets.ACR_USERNAME }}" --password-stdin
+          docker push mariaaiacr001.azurecr.io/agent-frontend:latest
+
+      # Frontend Deploy
+      - name: Deploy Frontend to Azure Container Apps
+        run: |
+          az containerapp update \
+            --name agent-frontend \
+            --resource-group maria-ai-service-001_group \
+            --image mariaaiacr001.azurecr.io/agent-frontend:latest \
+            --environment maria-ai-env \
+            --registry-server mariaaiacr001.azurecr.io \
+            --registry-username "${{ secrets.ACR_USERNAME }}" \
+            --registry-password "${{ secrets.ACR_PASSWORD }}" \
+            --ingress external \
+            --target-port 8501 \
+            --set-env-vars \
+                BACKEND_URL="https://agent-backend-new.${{ github.repository_owner }}.azurecontainerapps.io"
