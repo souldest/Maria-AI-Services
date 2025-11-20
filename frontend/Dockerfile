@@ -1,7 +1,18 @@
+# Basis-Image mit Python
 FROM python:3.11-slim
+
+# Arbeitsverzeichnis im Container
 WORKDIR /app
-COPY . /app
-RUN pip install --no-cache-dir --upgrade pip
-RUN pip install --no-cache-dir streamlit pandas matplotlib
+
+# Abhängigkeiten kopieren und installieren
+COPY frontend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Frontend-Code kopieren
+COPY . .
+
+# Streamlit Port
 EXPOSE 8501
-CMD ["streamlit", "run", "dashboard.py", "--server.port=8501", "--server.address=0.0.0.0"]
+
+# Startbefehl
+CMD ["streamlit", "run", "main.py", "--server.port=8501", "--server.address=0.0.0.0"]
