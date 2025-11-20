@@ -1,0 +1,38 @@
+name: Deploy Backend to Azure Container Apps
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Build and Push Backend Image
+        run: |
+          cd backend
+          docker build -t mariaairegistry.azurecr.io/agent-backend:latest .
+          echo ${{ secrets.ACR_PASSWORD }} | docker login mariaairegistry.azurecr.io -u ${{ secrets.ACR_USERNAME }} --password-stdin
+          docker push mariaairegistry.azurecr.io/agent-backend:latest
+
+      - name: Deploy Backend to Azure Container App
+        run: |
+          az containerapp update \
+            --name agent-backend \
+            --resource-group maria-ai-service-001_group \
+            --image mariaairegistry.azurecr.io/agent-backend:latest \
+            --environment-variables \
+              CREWAI_API_KEY=${{ secrets.CREWAI_API_KEY }} \
+              PGHOST=${{ secrets.PGHOST }} \
+              PGUSER=${{ secrets.PGUSER }} \
+              PGPASSWORD=${{ secrets.PGPASSWORD }} \
+              PGDATABASE=${{ secrets.PGDATABASE }} \
+              PGPORT=${{ secrets.PGPORT }}
