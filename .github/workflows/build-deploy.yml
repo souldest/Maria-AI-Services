@@ -65,14 +65,13 @@ jobs:
             --registry-username $ACR_USERNAME \
             --registry-password $ACR_PASSWORD \
             --ingress external \
-            --target-port 8000 \
-            --environment-variables \
-                CREWAI_API_KEY=${{ secrets.CREWAI_API_KEY }} \
-                PGHOST=${{ secrets.PGHOST }} \
-                PGUSER=${{ secrets.PGUSER }} \
-                PGPASSWORD=${{ secrets.PGPASSWORD }} \
-                PGDATABASE=${{ secrets.PGDATABASE }} \
-                PGPORT=${{ secrets.PGPORT }}
+            --target-port 8002 \
+            --environment-variables CREWAI_API_KEY=${{ secrets.CREWAI_API_KEY }} \
+                                   PGHOST=${{ secrets.PGHOST }} \
+                                   PGUSER=${{ secrets.PGUSER }} \
+                                   PGPASSWORD=${{ secrets.PGPASSWORD }} \
+                                   PGDATABASE=${{ secrets.PGDATABASE }} \
+                                   PGPORT=${{ secrets.PGPORT }}
 
   # Schritt 5: Frontend deployen (nach Backend)
   deploy-frontend:
@@ -98,5 +97,4 @@ jobs:
             --registry-password $ACR_PASSWORD \
             --ingress external \
             --target-port 8501 \
-            --environment-variables \
-                BACKEND_URL="https://agent-backend.${{ github.repository_owner }}.azurecontainerapps.io"
+            --environment-variables BACKEND_URL="https://agent-backend.${{ github.repository_owner }}.azurecontainerapps.io"
