@@ -8,9 +8,10 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      ACR_NAME: mariaaiacr001
 
     steps:
-      # Checkout des Codes
       - uses: actions/checkout@v3
 
       # Login zu Azure
@@ -22,9 +23,10 @@ jobs:
       # Build und Push Backend Image
       - name: Build and Push Backend Image
         run: |
-          echo ${{ secrets.ACR_PASSWORD }} | docker login mariaaiacr001.azurecr.io -u ${{ secrets.ACR_USERNAME }} --password-stdin
-          docker build -t mariaaiacr001.azurecr.io/agent-backend:latest ./backend
-          docker push mariaaiacr001.azurecr.io/agent-backend:latest
+          cd backend
+          docker build -t $ACR_NAME.azurecr.io/agent-backend:latest .
+          echo ${{ secrets.ACR_PASSWORD }} | docker login $ACR_NAME.azurecr.io -u ${{ secrets.ACR_USERNAME }} --password-stdin
+          docker push $ACR_NAME.azurecr.io/agent-backend:latest
 
       # Deploy Backend zu Azure Container Apps
       - name: Deploy Backend
@@ -33,9 +35,9 @@ jobs:
             --name agent-backend \
             --resource-group maria-ai-service-001_group \
             --environment maria-ai-env \
-            --image mariaaiacr001.azurecr.io/agent-backend:latest \
+            --image $ACR_NAME.azurecr.io/agent-backend:latest \
             --cpu 0.5 --memory 1Gi \
-            --registry-login-server mariaaiacr001.azurecr.io \
+            --registry-login-server $ACR_NAME.azurecr.io \
             --registry-username ${{ secrets.ACR_USERNAME }} \
             --registry-password ${{ secrets.ACR_PASSWORD }} \
             --ingress external \
@@ -51,9 +53,10 @@ jobs:
       # Build und Push Frontend Image
       - name: Build and Push Frontend Image
         run: |
-          echo ${{ secrets.ACR_PASSWORD }} | docker login mariaaiacr001.azurecr.io -u ${{ secrets.ACR_USERNAME }} --password-stdin
-          docker build -t mariaaiacr001.azurecr.io/agent-frontend:latest ./frontend
-          docker push mariaaiacr001.azurecr.io/agent-frontend:latest
+          cd frontend
+          docker build -t $ACR_NAME.azurecr.io/agent-frontend:latest .
+          echo ${{ secrets.ACR_PASSWORD }} | docker login $ACR_NAME.azurecr.io -u ${{ secrets.ACR_USERNAME }} --password-stdin
+          docker push $ACR_NAME.azurecr.io/agent-frontend:latest
 
       # Deploy Frontend zu Azure Container Apps
       - name: Deploy Frontend
@@ -62,9 +65,9 @@ jobs:
             --name agent-frontend \
             --resource-group maria-ai-service-001_group \
             --environment maria-ai-env \
-            --image mariaaiacr001.azurecr.io/agent-frontend:latest \
+            --image $ACR_NAME.azurecr.io/agent-frontend:latest \
             --cpu 0.5 --memory 1Gi \
-            --registry-login-server mariaaiacr001.azurecr.io \
+            --registry-login-server $ACR_NAME.azurecr.io \
             --registry-username ${{ secrets.ACR_USERNAME }} \
             --registry-password ${{ secrets.ACR_PASSWORD }} \
             --ingress external \
