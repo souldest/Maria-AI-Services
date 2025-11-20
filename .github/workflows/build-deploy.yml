@@ -5,11 +5,14 @@ on:
     branches:
       - main
 
+env:
+  ACR_NAME: mariaaiacr001
+  ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
+  ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
+
 jobs:
   docker-login:
     runs-on: ubuntu-latest
-    env:
-      ACR_NAME: mariaaiacr001
     outputs:
       registry: ${{ steps.set-registry.outputs.registry }}
     steps:
@@ -18,14 +21,12 @@ jobs:
       - name: Docker Login
         id: set-registry
         run: |
-          echo ${{ secrets.ACR_PASSWORD }} | docker login $ACR_NAME.azurecr.io -u ${{ secrets.ACR_USERNAME }} --password-stdin
+          echo $ACR_PASSWORD | docker login $ACR_NAME.azurecr.io -u $ACR_USERNAME --password-stdin
           echo "registry=$ACR_NAME.azurecr.io" >> $GITHUB_OUTPUT
 
   build-backend:
     runs-on: ubuntu-latest
     needs: docker-login
-    env:
-      ACR_NAME: mariaaiacr001
     steps:
       - uses: actions/checkout@v3
       - name: Build Backend Image
@@ -36,8 +37,6 @@ jobs:
   build-frontend:
     runs-on: ubuntu-latest
     needs: docker-login
-    env:
-      ACR_NAME: mariaaiacr001
     steps:
       - uses: actions/checkout@v3
       - name: Build Frontend Image
@@ -48,8 +47,6 @@ jobs:
   deploy-backend:
     runs-on: ubuntu-latest
     needs: build-backend
-    env:
-      ACR_NAME: mariaaiacr001
     steps:
       - uses: actions/checkout@v3
       - name: Login to Azure
@@ -66,8 +63,8 @@ jobs:
             --cpu 0.5 \
             --memory 1Gi \
             --registry-login-server $ACR_NAME.azurecr.io \
-            --registry-username ${{ secrets.ACR_USERNAME }} \
-            --registry-password ${{ secrets.ACR_PASSWORD }} \
+            --registry-username $ACR_USERNAME \
+            --registry-password $ACR_PASSWORD \
             --ingress external \
             --target-port 8000 \
             --environment-variables \
@@ -81,8 +78,6 @@ jobs:
   deploy-frontend:
     runs-on: ubuntu-latest
     needs: [build-frontend, deploy-backend]
-    env:
-      ACR_NAME: mariaaiacr001
     steps:
       - uses: actions/checkout@v3
       - name: Login to Azure
@@ -99,8 +94,8 @@ jobs:
             --cpu 0.5 \
             --memory 1Gi \
             --registry-login-server $ACR_NAME.azurecr.io \
-            --registry-username ${{ secrets.ACR_USERNAME }} \
-            --registry-password ${{ secrets.ACR_PASSWORD }} \
+            --registry-username $ACR_USERNAME \
+            --registry-password $ACR_PASSWORD \
             --ingress external \
             --target-port 8501 \
             --environment-variables \
