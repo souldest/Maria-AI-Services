@@ -23,8 +23,7 @@ jobs:
       # Build und Push Backend Image
       - name: Build and Push Backend Image
         run: |
-          cd backend
-          docker build -t $ACR_NAME.azurecr.io/agent-backend:latest .
+          docker build -t $ACR_NAME.azurecr.io/agent-backend:latest -f backend/Dockerfile ./backend
           echo ${{ secrets.ACR_PASSWORD }} | docker login $ACR_NAME.azurecr.io -u ${{ secrets.ACR_USERNAME }} --password-stdin
           docker push $ACR_NAME.azurecr.io/agent-backend:latest
 
@@ -36,7 +35,8 @@ jobs:
             --resource-group maria-ai-service-001_group \
             --environment maria-ai-env \
             --image $ACR_NAME.azurecr.io/agent-backend:latest \
-            --cpu 0.5 --memory 1Gi \
+            --cpu 0.5 \
+            --memory 1Gi \
             --registry-login-server $ACR_NAME.azurecr.io \
             --registry-username ${{ secrets.ACR_USERNAME }} \
             --registry-password ${{ secrets.ACR_PASSWORD }} \
@@ -53,8 +53,7 @@ jobs:
       # Build und Push Frontend Image
       - name: Build and Push Frontend Image
         run: |
-          cd frontend
-          docker build -t $ACR_NAME.azurecr.io/agent-frontend:latest .
+          docker build -t $ACR_NAME.azurecr.io/agent-frontend:latest -f frontend/Dockerfile ./frontend
           echo ${{ secrets.ACR_PASSWORD }} | docker login $ACR_NAME.azurecr.io -u ${{ secrets.ACR_USERNAME }} --password-stdin
           docker push $ACR_NAME.azurecr.io/agent-frontend:latest
 
@@ -66,7 +65,8 @@ jobs:
             --resource-group maria-ai-service-001_group \
             --environment maria-ai-env \
             --image $ACR_NAME.azurecr.io/agent-frontend:latest \
-            --cpu 0.5 --memory 1Gi \
+            --cpu 0.5 \
+            --memory 1Gi \
             --registry-login-server $ACR_NAME.azurecr.io \
             --registry-username ${{ secrets.ACR_USERNAME }} \
             --registry-password ${{ secrets.ACR_PASSWORD }} \
